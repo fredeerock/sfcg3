@@ -6,6 +6,14 @@ env.USE_CACHE = true;
 env.backends.onnx.wasm.numThreads = 1;  // Reduce thread count for better stability
 env.debug = true; // Enable debug mode for more detailed errors
 
+// Model configuration
+const CONFIG = {
+    MAX_NEW_TOKENS: 128,  // Shorter max tokens for generation (changed from 256)
+    TEMPERATURE: 0.7,     // Creativity level (0.0-1.0)
+    TOP_P: 0.9,           // Nucleus sampling parameter
+    FALLBACK_ENABLED: true // Allow fallback to default model files
+};
+
 class PipelineSingleton {
     static task = 'text-generation';
     static model = 'onnx-community/gemma-3-1b-it-ONNX';
@@ -17,19 +25,35 @@ class PipelineSingleton {
         try {
             console.log("Starting to load model...");
             
-            // Simplified pipeline creation following official examples
+            // Try to use model_q4f16.onnx specifically
             this.instance = await pipeline(
                 this.task,
                 this.model,
-                { progress_callback }
+                { 
+                    progress_callback,
+                    model_file: "model_q4f16.onnx"
+                }
             );
             
             console.log("Model loaded successfully!");
             return this.instance;
         } catch (error) {
-            console.error("Error initializing model:", error);
-            if (error.stack) console.error("Error stack:", error.stack);
-            throw error;
+            console.error("Error initializing model with specific file:", error);
+            
+            try {
+                // Fallback to default model file
+                console.log("Falling back to default model files...");
+                this.instance = await pipeline(
+                    this.task,
+                    this.model,
+                    { progress_callback }
+                );
+                console.log("Model loaded successfully with default files!");
+                return this.instance;
+            } catch (fallbackError) {
+                console.error("Fallback also failed:", fallbackError);
+                throw fallbackError;
+            }
         }
     }
 }
@@ -135,7 +159,8 @@ self.addEventListener('message', async (event) => {
         
         console.log("Preparing to generate text...");
         
-        // Prepare prompt for generation
+        // Always use the fixed max tokens value
+        const maxTokens = CONFIG.MAX_NEW_TOKENS; // Fixed at 128 tokens
         const userInput = event.data.text;
         
         // Create chat format that Gemma models expect
@@ -143,11 +168,14 @@ self.addEventListener('message', async (event) => {
             { role: 'user', content: userInput }
         ];
         
-        console.log("Using generation with prompt:", chatPrompt);
+        console.log(`Using generation with prompt (max tokens: ${maxTokens}):`, chatPrompt);
         
-        // Generate text with simpler parameters
+        // Generate text with configured parameters
         const output = await generator(chatPrompt, {
-            max_new_tokens: 256
+            max_new_tokens: maxTokens,
+            temperature: CONFIG.TEMPERATURE,
+            top_p: CONFIG.TOP_P,
+            do_sample: true
         });
 
         console.log('Model execution complete, raw output:', output);
