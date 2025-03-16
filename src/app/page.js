@@ -5,7 +5,11 @@ import Progress from './components/Progress'
 
 // App configuration - simplified with fixed token limit
 const APP_CONFIG = {
-  MODEL_TIMEOUT_MS: 60000  // 60 seconds model loading timeout
+  MODEL_TIMEOUT_MS: 65000  // 60 seconds model loading timeout
+};
+
+const logErrorToServer = async (errorMessage) => {
+  console.error('Error:', errorMessage); // Log error to the terminal
 };
 
 export default function Home() {
@@ -18,6 +22,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [isSafari, setIsSafari] = useState(false);
+  const [workerAlive, setWorkerAlive] = useState(true);
   const worker = useRef(null);
   const chatContainerRef = useRef(null);
   
@@ -76,6 +81,28 @@ export default function Home() {
     }
   }, [conversation]);
 
+  // Heartbeat mechanism
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (worker.current) {
+        worker.current.postMessage({ type: 'heartbeat' });
+      } else {
+        setWorkerAlive(false);
+        setError("Worker died unexpectedly. Please refresh the page.");
+        clearInterval(interval);
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!workerAlive && worker.current) {
+      worker.current.terminate();
+      worker.current = null;
+    }
+  }, [workerAlive]);
+
   useEffect(() => {
     // Create worker only once and if it doesn't exist yet
     if (!worker.current) {
@@ -83,15 +110,22 @@ export default function Home() {
         // Create a new worker
         worker.current = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
         console.log("Worker created successfully");
+        setWorkerAlive(true); // Set worker as alive upon creation
       } catch (error) {
         console.error("Failed to create worker:", error);
         setError("Failed to initialize AI model worker: " + error.message);
+        setWorkerAlive(false);
       }
     }
 
     // Only set up message handler if worker exists
     if (worker.current) {
       const onMessageReceived = (e) => {
+        if (e.data.type === 'heartbeat') {
+          // Respond to heartbeat to keep connection alive
+          return;
+        }
+
         const { status, output, message, overall } = e.data;
         console.log("Received message from worker:", e.data);
 
@@ -124,21 +158,39 @@ export default function Home() {
                 localStorage.setItem('pentest_conversation', JSON.stringify(newConvo));
               }
             } else {
-              setError("Received empty response from model");
+              const errorMessage = "Received empty response from model";
+              setError(errorMessage);
+              logErrorToServer(errorMessage);
             }
             break;
           case 'error':
             setIsLoading(false);
             setError(message);
+            logErrorToServer(message);
+            setWorkerAlive(false); // Set worker as not alive on error
             break;
         }
       };
 
       worker.current.addEventListener('message', onMessageReceived);
-      
+      worker.current.addEventListener('error', (error) => {
+        console.error("Worker error:", error);
+        const errorMessage = "Worker error: " + error.message;
+        setError(errorMessage);
+        logErrorToServer(errorMessage);
+        setWorkerAlive(false);
+      });
+
       return () => {
         if (worker.current) {
           worker.current.removeEventListener('message', onMessageReceived);
+          worker.current.removeEventListener('error', (error) => {
+            console.error("Worker cleanup error:", error);
+            const errorMessage = "Worker cleanup error: " + error.message;
+            setError(errorMessage);
+            logErrorToServer(errorMessage);
+            setWorkerAlive(false);
+          });
         }
       };
     }
@@ -171,7 +223,9 @@ export default function Home() {
         });
       } catch (error) {
         console.error("Error sending message to worker:", error);
-        setError("Failed to send message to model: " + error.message);
+        const errorMessage = "Failed to send message to model: " + error.message;
+        setError(errorMessage);
+        logErrorToServer(errorMessage);
         setIsLoading(false);
       }
     }
@@ -179,18 +233,13 @@ export default function Home() {
 
   // Safari-safe form submission handler
   const handleSubmit = (e) => {
-    if (e && e.preventDefault) {
-      e.preventDefault(); // Prevent form submission
-      e.stopPropagation(); // Stop event propagation
-    }
+    e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Stop event propagation
     
     if (!isLoading && inputText.trim()) {
       sendMessage(inputText);
       setInputText('');
     }
-    
-    // Return false to prevent form submission in old browsers
-    return false;
   };
 
   // Safari-safe button click handler
@@ -202,8 +251,6 @@ export default function Home() {
       sendMessage(inputText);
       setInputText('');
     }
-    
-    return false;
   };
 
   return (
@@ -299,6 +346,12 @@ export default function Home() {
         </div>
       )}
       
+      {!workerAlive && (
+        <div className="w-full max-w-md p-2 bg-red-100 text-red-700 rounded mt-4">
+          Worker died unexpectedly. Please refresh the page.
+        </div>
+      )}
+
       {modelLoaded && (
         <div className="w-full max-w-md p-2 text-green-700 text-center mt-2 text-sm">
           Model loaded successfully

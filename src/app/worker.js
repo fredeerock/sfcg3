@@ -10,7 +10,7 @@ env.debug = true; // Enable debug mode for more detailed errors
 const CONFIG = {
     MAX_NEW_TOKENS: 128,  // Shorter max tokens for generation (changed from 256)
     TEMPERATURE: 0.7,     // Creativity level (0.0-1.0)
-    TOP_P: 0.9,           // Nucleus sampling parameter
+    TOP_P: 0.8,           // Nucleus sampling parameter
     FALLBACK_ENABLED: true // Allow fallback to default model files
 };
 
@@ -84,7 +84,17 @@ const progressTracker = {
     }
 };
 
+const logErrorToServer = async (errorMessage) => {
+  console.error('Error:', errorMessage); // Log error to the terminal
+};
+
 self.addEventListener('message', async (event) => {
+    if (event.data.type === 'heartbeat') {
+        // Respond to heartbeat to keep connection alive
+        self.postMessage({ type: 'heartbeat' });
+        return;
+    }
+
     let timeoutId = null;
     
     try {
@@ -94,7 +104,7 @@ self.addEventListener('message', async (event) => {
                 status: 'error', 
                 message: 'Operation timed out after 60 seconds' 
             });
-        }, 60000); // 60 second timeout
+        }, 70000); // 70 second timeout
         
         // Reset progress tracking for new model loading
         progressTracker.files.clear();
@@ -207,12 +217,24 @@ self.addEventListener('message', async (event) => {
     } catch (error) {
         console.error("An error occurred during model execution:", error);
         if (error.stack) console.error("Error stack:", error.stack);
+        const errorMessage = `Error: ${error.message || error}. Check console for details.`;
+        logErrorToServer(errorMessage);
         self.postMessage({ 
             status: 'error', 
-            message: `Error: ${error.message || error}. Check console for details.` 
+            message: errorMessage
         });
     } finally {
         // Clear the timeout if it exists
         if (timeoutId) clearTimeout(timeoutId);
     }
+});
+
+self.addEventListener('error', (error) => {
+    console.error("Worker global error:", error);
+    const errorMessage = `Worker global error: ${error.message || error}`;
+    logErrorToServer(errorMessage);
+    self.postMessage({
+        status: 'error',
+        message: errorMessage
+    });
 });
