@@ -64,8 +64,8 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-12">
-      <h1 className="text-5xl font-bold mb-2 text-center">Chatbot</h1>
-      <h2 className="text-2xl mb-4 text-center">Next.js template</h2>
+      <h1 className="text-5xl font-bold mb-2 text-center">The Pen Test</h1>
+      <h2 className="text-2xl mb-4 text-center">Is the Pen Mightier than the LLM?</h2>
 
       <div className="w-full max-w-md p-4 border border-gray-300 rounded mb-4 h-64 overflow-y-auto">
         {conversation.map((msg, index) => (
