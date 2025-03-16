@@ -1,57 +1,33 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export default function Home() {
-  // Keep track of the conversation, model loading status, and progress.
   const [conversation, setConversation] = useState([]);
-  const [ready, setReady] = useState(null);
-  const [progress, setProgress] = useState(0);
-
-  // Create a reference to the worker object.
+  const [error, setError] = useState(null);
   const worker = useRef(null);
 
-  // We use the `useEffect` hook to set up the worker as soon as the `App` component is mounted.
   useEffect(() => {
     if (!worker.current) {
-      // Create the worker if it does not yet exist.
-      worker.current = new Worker(new URL('./worker.js', import.meta.url), {
-        type: 'module'
-      });
+      worker.current = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     }
 
-    // Create a callback function for messages from the worker thread.
     const onMessageReceived = (e) => {
-      switch (e.data.status) {
-        case 'initiate':
-          setReady(false);
-          break;
-        case 'progress':
-          setProgress(e.data.progress);
-          break;
-        case 'ready':
-          setReady(true);
-          setProgress(100);
-          break;
-        case 'complete':
-          setConversation(prev => [...prev, { type: 'bot', text: e.data.output[0].generated_text }]);
-          break;
-      }
+      const { status, output, message } = e.data;
+      if (status === 'complete') setConversation(prev => [...prev, { type: 'bot', text: output[0].generated_text }]);
+      if (status === 'error') setError(message);
     };
 
-    // Attach the callback function as an event listener.
     worker.current.addEventListener('message', onMessageReceived);
-
-    // Define a cleanup function for when the component is unmounted.
     return () => worker.current.removeEventListener('message', onMessageReceived);
-  });
+  }, []);
 
-  const sendMessage = useCallback((text) => {
+  const sendMessage = (text) => {
     if (worker.current) {
       setConversation(prev => [...prev, { type: 'user', text }]);
       worker.current.postMessage({ text });
     }
-  }, []);
+  };
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-12">
@@ -78,10 +54,10 @@ export default function Home() {
         }}
       />
 
-      {ready !== null && (
-        <pre className="bg-gray-100 p-2 rounded">
-          { !ready ? `Loading... ${progress}%` : 'Ready to chat!' }
-        </pre>
+      {error && (
+        <div className="w-full max-w-xs p-2 bg-red-100 text-red-700 rounded mb-4">
+          Error: {error}
+        </div>
       )}
     </main>
   )
