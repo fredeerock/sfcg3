@@ -15,73 +15,38 @@ class PipelineSingleton {
     }
 }
 
-// Function to ensure we send periodic updates even at the beginning
-function ensureInitialProgress() {
-    let initialProgressSent = false;
+// Simplified progress tracking
+const progressTracker = {
+    files: new Map(), // Track progress of individual files
     
-    // Send a 1% progress after a short delay if no other progress has been sent
-    setTimeout(() => {
-        if (!initialProgressSent) {
-            self.postMessage({ 
-                status: 'progress', 
-                file: 'model', 
-                progress: 1, 
-                total: 'loading model' 
-            });
-        }
-    }, 1000);
+    updateProgress: function(file, progress) {
+        this.files.set(file, Math.min(Math.max(progress, 0), 100));
+        return this.getOverallProgress();
+    },
     
-    return () => { initialProgressSent = true; };
-}
-
-// Track the overall loading state
-const overallProgress = {
-    totalFiles: 0,
-    loadedFiles: 0,
-    filesInProgress: new Map(), // Map to track individual file progress
-    getProgress: function() {
-        // If no files, return 0
-        if (this.totalFiles === 0) return 0;
+    fileCompleted: function(file) {
+        this.files.set(file, 100);
+        return this.getOverallProgress();
+    },
+    
+    getOverallProgress: function() {
+        if (this.files.size === 0) return 0;
         
-        // If all files are loaded, return 100%
-        if (this.loadedFiles === this.totalFiles) return 100;
-        
-        // Otherwise calculate weighted progress of all files
         let totalProgress = 0;
-        
-        // Add progress from files in progress
-        this.filesInProgress.forEach((progress) => {
+        this.files.forEach(progress => {
             totalProgress += progress;
         });
         
-        // Add 100% for each fully loaded file
-        totalProgress += (this.loadedFiles * 100);
-        
-        // Calculate average progress
-        return totalProgress / Math.max(this.totalFiles, 1);
-    },
-    updateFileProgress: function(file, progress) {
-        this.filesInProgress.set(file, progress);
-        return this.getProgress();
-    },
-    fileCompleted: function(file) {
-        this.filesInProgress.delete(file);
-        this.loadedFiles++;
-        return this.getProgress();
-    },
-    newFile: function() {
-        this.totalFiles++;
+        return totalProgress / this.files.size;
     }
 };
 
 self.addEventListener('message', async (event) => {
     try {
         // Reset progress tracking for new model loading
-        overallProgress.totalFiles = 0;
-        overallProgress.loadedFiles = 0;
-        overallProgress.filesInProgress.clear();
+        progressTracker.files.clear();
         
-        // First, send a message that we're starting to load
+        // Start loading notification
         self.postMessage({ 
             status: 'initiate', 
             file: 'model', 
@@ -90,21 +55,13 @@ self.addEventListener('message', async (event) => {
             overall: 0
         });
         
-        // Setup a function to mark when we've sent initial progress
-        const markProgressSent = ensureInitialProgress();
-        
-        // Load the model with proper progress handling
+        // Load the model with progress handling
         const generator = await PipelineSingleton.getInstance(progress => {
-            // Mark that we've sent a progress update
-            markProgressSent();
-            
             // Handle both numeric and object progress updates
             if (typeof progress === 'number') {
                 const progressPercentage = Math.min(Math.max(progress * 100, 0), 100);
+                const overallPercent = progressTracker.updateProgress('model', progressPercentage);
                 
-                const overallPercent = overallProgress.updateFileProgress('model', progressPercentage);
-                
-                // Send progress update to main thread
                 self.postMessage({ 
                     status: 'progress', 
                     file: 'model', 
@@ -113,19 +70,13 @@ self.addEventListener('message', async (event) => {
                     overall: overallPercent
                 });
             } else if (typeof progress === 'object' && progress !== null) {
-                // Process object progress updates
                 if (progress.status === 'progress' && typeof progress.progress === 'number') {
                     const progressPercentage = Math.min(Math.max(progress.progress, 0), 100);
+                    const overallPercent = progressTracker.updateProgress(
+                        progress.file || 'unknown', 
+                        progressPercentage
+                    );
                     
-                    // Track this file in overall progress
-                    if (!overallProgress.filesInProgress.has(progress.file)) {
-                        overallProgress.newFile();
-                    }
-                    
-                    // Update overall progress
-                    const overallPercent = overallProgress.updateFileProgress(progress.file, progressPercentage);
-                    
-                    // Send the actual file progress to the main thread
                     self.postMessage({
                         status: 'progress',
                         file: progress.file || 'model',
@@ -134,11 +85,8 @@ self.addEventListener('message', async (event) => {
                         overall: overallPercent
                     });
                 } else if (progress.status === 'done') {
+                    const overallPercent = progressTracker.fileCompleted(progress.file || 'unknown');
                     
-                    // Update overall progress for completed file
-                    const overallPercent = overallProgress.fileCompleted(progress.file);
-                    
-                    // File is done loading
                     self.postMessage({
                         status: 'fileLoaded',
                         file: progress.file || 'file',
@@ -148,16 +96,7 @@ self.addEventListener('message', async (event) => {
             }
         });
         
-        // Model is fully loaded - set progress to 100%
-        self.postMessage({ 
-            status: 'progress', 
-            file: 'model', 
-            progress: 100, 
-            total: 'loading model',
-            overall: 100
-        });
-        
-        // Model is loaded
+        // Model is fully loaded
         self.postMessage({ 
             status: 'done', 
             file: 'model',
