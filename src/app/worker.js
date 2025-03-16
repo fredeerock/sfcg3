@@ -1,17 +1,36 @@
 import { pipeline, env } from "@huggingface/transformers";
 
+// Configure environment for better CPU compatibility
 env.allowLocalModels = false;
+env.USE_CACHE = true;
+env.backends.onnx.wasm.numThreads = 1;  // Reduce thread count for better stability
+env.debug = true; // Enable debug mode for more detailed errors
 
 class PipelineSingleton {
-    static task = 'text2text-generation';
-    static model = 'Xenova/LaMini-Flan-T5-783M';
+    static task = 'text-generation';
+    static model = 'onnx-community/gemma-3-1b-it-ONNX';
     static instance = null;
 
     static async getInstance(progress_callback) {
-        if (!this.instance) {
-            this.instance = await pipeline(this.task, this.model, { progress_callback });
+        if (this.instance) return this.instance;
+        
+        try {
+            console.log("Starting to load model...");
+            
+            // Simplified pipeline creation following official examples
+            this.instance = await pipeline(
+                this.task,
+                this.model,
+                { progress_callback }
+            );
+            
+            console.log("Model loaded successfully!");
+            return this.instance;
+        } catch (error) {
+            console.error("Error initializing model:", error);
+            if (error.stack) console.error("Error stack:", error.stack);
+            throw error;
         }
-        return this.instance;
     }
 }
 
@@ -42,7 +61,17 @@ const progressTracker = {
 };
 
 self.addEventListener('message', async (event) => {
+    let timeoutId = null;
+    
     try {
+        // Set a global timeout to prevent hanging
+        timeoutId = setTimeout(() => {
+            self.postMessage({ 
+                status: 'error', 
+                message: 'Operation timed out after 60 seconds' 
+            });
+        }, 60000); // 60 second timeout
+        
         // Reset progress tracking for new model loading
         progressTracker.files.clear();
         
@@ -104,12 +133,58 @@ self.addEventListener('message', async (event) => {
         });
         self.postMessage({ status: 'ready' });
         
-        const output = await generator(event.data.text, { max_length: 100 });
+        console.log("Preparing to generate text...");
+        
+        // Prepare prompt for generation
+        const userInput = event.data.text;
+        
+        // Create chat format that Gemma models expect
+        const chatPrompt = [
+            { role: 'user', content: userInput }
+        ];
+        
+        console.log("Using generation with prompt:", chatPrompt);
+        
+        // Generate text with simpler parameters
+        const output = await generator(chatPrompt, {
+            max_new_tokens: 256
+        });
 
-        console.log('Model execution complete');
-        self.postMessage({ status: 'complete', output });
+        console.log('Model execution complete, raw output:', output);
+        
+        // Extract text from the response
+        let responseText = '';
+        
+        if (Array.isArray(output) && output.length > 0) {
+            if (output[0].generated_text && typeof output[0].generated_text === 'string') {
+                // Direct string output
+                responseText = output[0].generated_text;
+            } else if (Array.isArray(output[0].generated_text)) {
+                // Array format - get last message
+                responseText = output[0].generated_text.at(-1)?.content || 'No response generated';
+            } else {
+                // Fallback with JSON stringify for debugging
+                responseText = 'Received response in unexpected format: ' + JSON.stringify(output);
+            }
+        } else {
+            responseText = 'No output generated';
+        }
+        
+        console.log('Extracted response text:', responseText);
+        
+        self.postMessage({ 
+            status: 'complete', 
+            output: [{ generated_text: responseText }] 
+        });
     } catch (error) {
         console.error("An error occurred during model execution:", error);
-        self.postMessage({ status: 'error', message: error.message });
+        if (error.stack) console.error("Error stack:", error.stack);
+        self.postMessage({ 
+            status: 'error', 
+            message: `Error: ${error.message || error}. Check console for details.` 
+        });
+    } finally {
+        // Clear the timeout if it exists
+        if (timeoutId) clearTimeout(timeoutId);
     }
 });
