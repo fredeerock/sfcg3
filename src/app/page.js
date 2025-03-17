@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Progress from './components/Progress'
+import ReactMarkdown from 'react-markdown'
 
 export default function Home() {
   const [conversation, setConversation] = useState([]);
@@ -160,8 +161,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-12">
-      <h1 className="text-5xl font-bold mb-2 text-center">The Pen Test</h1>
-      <h2 className="text-2xl mb-4 text-center">Is the Pen Mightier than the LLM?</h2>
+      <h1 className="text-5xl font-bold mb-2 text-center">Local Gemma 3 Demo</h1>
 
       <div 
         ref={chatContainerRef}
@@ -175,7 +175,26 @@ export default function Home() {
         
         {conversation.map((msg, index) => (
           <div key={index} className={`p-2 mb-2 ${msg.type === 'user' ? 'text-right bg-gray-100 rounded-lg' : 'text-left bg-blue-100 rounded-lg'}`}>
-            <strong>{msg.type === 'user' ? 'You' : 'Bot'}:</strong> {msg.text}
+            <strong>{msg.type === 'user' ? 'You' : 'Bot'}:</strong>
+            <div className={msg.type === 'user' ? '' : 'mt-1 prose prose-sm max-w-none'}>
+              {msg.type === 'user' ? (
+                <span>{msg.text}</span>
+              ) : (
+                <ReactMarkdown components={{
+                  // Add custom styling to elements as needed
+                  pre: ({node, ...props}) => (
+                    <pre className="overflow-x-auto p-2 bg-gray-50 rounded" {...props} />
+                  ),
+                  code: ({node, inline, ...props}) => (
+                    inline 
+                      ? <code className="bg-gray-50 px-1 py-0.5 rounded text-sm" {...props} />
+                      : <code className="block" {...props} />
+                  )
+                }}>
+                  {msg.text}
+                </ReactMarkdown>
+              )}
+            </div>
           </div>
         ))}
         
@@ -228,8 +247,6 @@ export default function Home() {
         </div>
       )}
       
-      {/* Removed worker alive check */}
-
       {modelLoaded && (
         <div className="w-full max-w-md p-2 text-green-700 text-center mt-2 text-sm">
           Model loaded successfully
