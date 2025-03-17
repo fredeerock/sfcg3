@@ -2,8 +2,6 @@
 
 A simple web application that demonstrates running Gemma 3 LLM directly in the browser using ONNX runtime.
 
-![Demo Screenshot](public/screenshot.png)
-
 ## Features
 
 - Run Gemma 3 (1B) directly in your browser - no API keys needed
