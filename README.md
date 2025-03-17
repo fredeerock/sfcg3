@@ -15,6 +15,11 @@ A simple web application that demonstrates running Gemma 3 LLM directly in the b
 
 1. Install dependencies:
    ```bash
+   npm install https://github.com/huggingface/transformers.js/archive/new-model.tar.gz
+   cd node_modules/@huggingface/transformers
+   npm install
+   npm run build
+   cd ../../..
    npm install
    ```
 
