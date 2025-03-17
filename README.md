@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Local Gemma 3 Demo
 
-## Getting Started
+A simple web application that demonstrates running Gemma 3 LLM directly in the browser using ONNX runtime.
 
-First, run the development server:
+![Demo Screenshot](public/screenshot.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Run Gemma 3 (1B) directly in your browser - no API keys needed
+- Complete privacy - all processing happens locally
+- Simple chat interface with markdown support
+- Persists conversations between sessions
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Quick Start
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-## Learn More
+2. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+3. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Requirements
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Modern web browser with WebAssembly support
+- Recommended: At least 4GB of available RAM for model loading
 
-## Deploy on Vercel
+## How It Works
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This demo uses Next.js and the Hugging Face Transformers.js library to load and run the quantized ONNX version of Gemma 3 directly in your browser through WebAssembly.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Technologies
+
+- Next.js
+- React
+- Tailwind CSS
+- Hugging Face Transformers.js
+- ONNX Runtime Web
