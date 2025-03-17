@@ -11,7 +11,6 @@ export default function Home() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
-  const [workerAlive, setWorkerAlive] = useState(true);
   const worker = useRef(null);
   const chatContainerRef = useRef(null);
 
@@ -56,43 +55,20 @@ export default function Home() {
     }
   }, [conversation]);
 
-  // Heartbeat mechanism
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (worker.current) {
-        worker.current.postMessage({ type: 'heartbeat' });
-      } else {
-        setWorkerAlive(false);
-        setError("Worker died unexpectedly. Please refresh the page.");
-        clearInterval(interval);
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (!workerAlive && worker.current) {
-      worker.current.terminate();
-      worker.current = null;
-    }
-  }, [workerAlive]);
+  // Removed heartbeat mechanism
 
   useEffect(() => {
     if (!worker.current) {
       try {
         worker.current = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
-        setWorkerAlive(true);
       } catch (error) {
         setError("Failed to initialize AI model worker: " + error.message);
-        setWorkerAlive(false);
       }
     }
 
     if (worker.current) {
       const onMessageReceived = (e) => {
-        if (e.data.type === 'heartbeat') return;
-
+        // Removed heartbeat check
         const { status, output, message, overall } = e.data;
 
         if (overall !== undefined) {
@@ -126,7 +102,6 @@ export default function Home() {
           case 'error':
             setIsLoading(false);
             setError(message);
-            setWorkerAlive(false);
             break;
         }
       };
@@ -134,7 +109,6 @@ export default function Home() {
       worker.current.addEventListener('message', onMessageReceived);
       worker.current.addEventListener('error', (error) => {
         setError("Worker error: " + error.message);
-        setWorkerAlive(false);
       });
 
       return () => {
@@ -142,7 +116,6 @@ export default function Home() {
           worker.current.removeEventListener('message', onMessageReceived);
           worker.current.removeEventListener('error', (error) => {
             setError("Worker cleanup error: " + error.message);
-            setWorkerAlive(false);
           });
         }
       };
@@ -255,11 +228,7 @@ export default function Home() {
         </div>
       )}
       
-      {!workerAlive && (
-        <div className="w-full max-w-md p-2 bg-red-100 text-red-700 rounded mt-4">
-          Worker died unexpectedly. Please refresh the page.
-        </div>
-      )}
+      {/* Removed worker alive check */}
 
       {modelLoaded && (
         <div className="w-full max-w-md p-2 text-green-700 text-center mt-2 text-sm">

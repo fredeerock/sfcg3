@@ -71,11 +71,8 @@ const progressTracker = {
 };
 
 self.addEventListener('message', async (event) => {
-    if (event.data.type === 'heartbeat') {
-        self.postMessage({ type: 'heartbeat' });
-        return;
-    }
-
+    // Removed heartbeat check
+    
     let timeoutId = null;
     
     try {
