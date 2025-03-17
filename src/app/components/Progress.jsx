@@ -1,9 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react';
-
 export default function Progress({ text, percentage = 0 }) {
-  // Make sure we're working with a proper number
   const safePercentage = Math.min(Math.max(parseFloat(percentage) || 0, 0), 100);
 
   return (
